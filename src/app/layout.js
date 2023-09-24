@@ -1,10 +1,10 @@
 "use client";
 import { MantineWrapper } from "@/libs/MantineWrapper";
 import { $authenStore } from "@/libs/authenStore";
-import { Container, Title } from "@mantine/core";
+import { Container, Group, Loader, Title } from "@mantine/core";
 import axios from "axios";
 import { Inter } from "next/font/google";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -16,10 +16,12 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   const [isCheckingAuthen, setIsCheckingAuthen] = useState(true);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition(); //เอาไว้ใช้เช็คว่า router push ทำงานเสร็จหรือยัง
   const router = useRouter();
+  const pathName = usePathname();
 
   const checkAuthen = async () => {
+    setIsCheckingAuthen(true);
     const token = localStorage.getItem("token");
     const authenUsername = localStorage.getItem("authenUsername");
 
@@ -33,16 +35,30 @@ export default function RootLayout({ children }) {
         const resp = await axios.get("/api/user/checkAuthen", {
           headers: { Authorization: `Bearer ${token}` },
         });
+        $authenStore.set({
+          token,
+          authenUsername,
+        });
       } catch (err) {
         console.log(err.message);
 
         //mark as unauthorized
+        isTokenValid = false;
       }
     }
 
     //go to login if not logged in yet and trying to access protected route
-
+    if (pathName != "/" && !isTokenValid) {
+      startTransition(() => {
+        router.push("/");
+      });
+    } else if (isTokenValid) {
+      startTransition(() => {
+        router.push("/student");
+      });
+    }
     //go to /student if already logged in
+    setIsCheckingAuthen(false);
   };
 
   useEffect(() => {
@@ -54,17 +70,23 @@ export default function RootLayout({ children }) {
       <body className={inter.className}>
         <MantineWrapper>
           {/* hide page content with loader */}
-          {/* <Group position="center">
-              <Loader />
-            </Group> */}
-          <Container size="sm">
-            <Title italic align="center" color="violet" my="xs">
-              Course Enrollment
-            </Title>
-            {children}
-          </Container>
+          {isCheckingAuthen ||
+            (isPending && (
+              <Group position="center">
+                <Loader />
+              </Group>
+            ))}
+          {!isCheckingAuthen && !isPending && (
+            <Container size="sm">
+              <Title italic align="center" color="violet" my="xs">
+                Course Enrollment
+              </Title>
+              {children}
+            </Container>
+          )}
         </MantineWrapper>
       </body>
     </html>
   );
 }
+//-(p v q) = -p ^ -q
